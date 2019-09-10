@@ -12,10 +12,10 @@
     https://forum.pjrc.com/threads/44449-Vector-draw-examples-libs-using-T3-5-3-6-DAC
 
     TODO:
-      lissajous
       spinny cube
       rotating text
-
+      text in from serial port (including line breaks etc)
+      bubbles
 */
 
 #include "hershey_font.h"
@@ -71,7 +71,9 @@ void loop() {
   // box_test();
   // circle_test();
 
-  test_machine();
+  bowditch_test();
+  
+  machine_test();
 
   spiral_test();
 
@@ -319,7 +321,7 @@ void draw_machine(uint8_t scale)
     }
 }
 
-void test_machine()
+void machine_test()
 {
     for(int i=0; i<256; i++)
     {
@@ -333,5 +335,28 @@ void test_machine()
     for(int i=256; i>0; i--)
     {
       draw_machine(i);
+    }
+}
+
+
+/*
+ * **************************************************************************************
+*/
+
+void bowditch_test()
+{
+    // Bowditch aka Lissajous figures
+    int freq1 = 301;
+    int freq2 = 200;
+    
+    Quadrature pendulum1(0, freq1);
+    Quadrature pendulum2(0, freq2);
+    moveto(pendulum1.cos() * 2048 + 2047, pendulum2.sin() * 2048 + 2047);
+    long start = millis();
+    while (millis() - start < 10000)
+    {
+        pendulum1.step();
+        pendulum2.step();
+        lineto(pendulum1.cos() * 2048 + 2047, pendulum2.sin() * 2048 + 2047);
     }
 }
