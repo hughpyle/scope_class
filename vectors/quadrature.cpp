@@ -8,7 +8,7 @@
  * https://brainwagon.org/2008/01/07/sines-and-cosines-of-the-times/
  */
 
-Quadrature::Quadrature(uint16_t start_degrees, float points_per_cycle)
+Quadrature::Quadrature(float start_degrees, float points_per_cycle, float radius)
 {
     // Initialize for a given number of points per cycle
     // (e.g. points_per_cycle = freq / sample_rate)
@@ -17,12 +17,12 @@ Quadrature::Quadrature(uint16_t start_degrees, float points_per_cycle)
     float delta_angle = 2.0 * PI / points_per_cycle;
     quad_cm =  2.0 * cosf(delta_angle);
 
-    quad_c2 = cosf(start_angle - 2.0 * delta_angle);
-    quad_c1 = cosf(start_angle - 1.0 * delta_angle);
-    quad_cos = cosf(start_angle);
-    quad_s2 = sinf(start_angle - 2.0 * delta_angle);
-    quad_s1 = sinf(start_angle - 1.0 * delta_angle);
-    quad_sin = sinf(start_angle);
+    quad_c2  = radius * cosf(start_angle - 2.0 * delta_angle);
+    quad_c1  = radius * cosf(start_angle - 1.0 * delta_angle);
+    quad_cos = radius * cosf(start_angle);
+    quad_s2  = radius * sinf(start_angle - 2.0 * delta_angle);
+    quad_s1  = radius * sinf(start_angle - 1.0 * delta_angle);
+    quad_sin = radius * sinf(start_angle);
 }
 
 
@@ -41,33 +41,21 @@ void Quadrature::step()
 }
 
 
-float Quadrature::cos()
-{
-    return quad_cos;
-}
-
-
-float Quadrature::sin()
-{
-    return quad_sin;
-}
-
-
 void quad_arc(uint16_t center_x, uint16_t center_y, uint16_t radius, uint16_t start_degrees, uint16_t end_degrees, uint16_t points_per_circle)
 {
     // draw circular arc centered at x,y with given radius,
     // with the starting and end points defined.
-    Quadrature arc(start_degrees, points_per_circle);
-    int x = arc.cos() * radius + center_x;
-    int y = arc.sin() * radius + center_y;
+    Quadrature arc(start_degrees, points_per_circle, radius);
+    int x = arc.cos() + center_x;
+    int y = arc.sin() + center_y;
     moveto(x, y);
     uint16_t count = points_per_circle * 360 / (end_degrees - start_degrees);
     for(uint16_t i=0; i<=count; i++)
     {
         int xx, yy;
         arc.step();
-        xx = arc.cos() * radius + center_x;
-        yy = arc.sin() * radius + center_y;
+        xx = arc.cos() + center_x;
+        yy = arc.sin() + center_y;
         line(x, y, xx, yy);
         x = xx;
         y = yy;
@@ -77,6 +65,6 @@ void quad_arc(uint16_t center_x, uint16_t center_y, uint16_t radius, uint16_t st
 
 void quad_circle(uint16_t center_x, uint16_t center_y, uint16_t radius)
 {
-    uint16_t points = max(radius/4, 10);
+    uint16_t points = max(radius/8, 10);
     quad_arc(center_x, center_y, radius, 0, 360, points);
 }

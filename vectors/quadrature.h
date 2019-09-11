@@ -11,19 +11,21 @@ class Quadrature {
 
 public:
     // Make a new arc
-    Quadrature(uint16_t start_degrees, float points_per_cycle);
+    Quadrature(float start_degrees=0.0, float points_per_cycle=360, float radius=1.0);
 
     // Move by one step
     void step();
 
+    // public
+    float quad_cos, quad_sin;
     // Getters
-    float cos();
-    float sin();
+    inline float cos() { return quad_cos; }
+    inline float sin() { return quad_sin; }
 
 protected:
     float quad_cm;
-    float quad_cos, quad_c1, quad_c2;
-    float quad_sin, quad_s1, quad_s2;
+    float quad_c1, quad_c2;
+    float quad_s1, quad_s2;
 
 };
 

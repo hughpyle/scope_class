@@ -10,8 +10,6 @@
 #include <stdint.h>
 
 
-void initVec(void);
-
 void moveto(int x, int y);
 
 
@@ -71,5 +69,38 @@ int draw_string(const char * s, int x, int y, int size);
 int size_string(const char *s, int size);
 
 void draw_char_rot(const vector_rot_t * const r, int x, int y, char val);
+
+
+// 3d
+
+class Point2
+{
+  public:
+    float x, y;
+
+    Point2(float xx=0, float yy=0)
+      : x(xx), y(yy)
+    {
+    }
+};
+
+class Matrix3
+{
+  public:
+    float m[9];
+};
+
+class Point3
+{
+  public:
+    float x, y, z;
+
+    Point3(float xx=0, float yy=0, float zz=0)
+      : x(xx), y(yy), z(zz)
+    {
+    }
+
+    void rotate(Matrix3 t);
+};
 
 #endif

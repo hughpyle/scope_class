@@ -13,7 +13,6 @@
 /** Slow scopes require time at each move; give them the chance */
 /* #define CONFIG_SLOW_SCOPE */
 
-
 int outX = 0;  // remember current point
 int outY = 0;  //
 
@@ -46,9 +45,10 @@ static inline void pixel_delay(void)
 void line_vert(int x0, int y0, uint16_t h)
 {
     moveto(x0, y0);
-    for (uint16_t i = 0; i < h; i++)
+    while(h > 0)
     {
         outY = y0++;
+        h--;
         _out();
         pixel_delay();
     }
@@ -58,18 +58,13 @@ void line_vert(int x0, int y0, uint16_t h)
 void line_horiz(int x0, int y0, uint16_t w)
 {
     moveto(x0, y0);
-    for (uint16_t i = 0; i < w; i++)
+    while(w > 0)
     {
         outX = x0++;
+        w--;
         _out();
         pixel_delay();
     }
-}
-
-
-void lineto(int x1, int y1)
-{
-    line(outX, outY, x1, y1);
 }
 
 
@@ -121,12 +116,8 @@ void line(int x0, int y0, int x1, int y1)
 	int err = dx - dy;
 
 	moveto(x0, y0);
-
-	while (1)
+	while (!(x0 == x1 && y0 == y1))
 	{
-		if (x0 == x1 && y0 == y1)
-			break;
-
 		int e2 = 2 * err;
 		if (e2 > -dy)
 		{
@@ -145,6 +136,11 @@ void line(int x0, int y0, int x1, int y1)
 	}
 }
 
+
+void lineto(int x1, int y1)
+{
+  line(outX, outY, x1, y1);
+}
 
 
 void
@@ -267,13 +263,13 @@ int draw_string(const char * s, int x, int y, int size)
 int size_string(const char *s, int size)
 {
     int extent = 0;
-	while(*s)
-	{
-		char c = *s++;
-		const hershey_char_t * const f = &hershey_simplex[c - ' '];
-		extent += (f->width * size) * 3 / 4;
-	}
-	return extent;
+  	while(*s)
+  	{
+    		char c = *s++;
+    		const hershey_char_t * const f = &hershey_simplex[c - ' '];
+    		extent += (f->width * size) * 3 / 4;
+  	}
+  	return extent;
 }
 
 
@@ -292,106 +288,16 @@ uint16_t scaling(uint16_t d, uint8_t scale) {
 }
 
 /*
-uint16_t size_str(const char *str , uint8_t scale)
+ ******
+ */
+
+void Point3::rotate(Matrix3 t)
 {
-  // return pixel (DAC count) length of given string at current scale
-  char c;
-  uint16_t w = 0;
-  while ((c = *str++)) {
-    int asc = c - 0x20;               // row in file is ascii code c - 32
-    w += hershey_simplex[asc][1];             // width of character is first entry in row
-  }
-  return scaling(w, scale);
+    // Matrix multiply
+    float xx = (x * t.m[0]) + (y * t.m[3]) + (z * t.m[6]);
+    float yy = (x * t.m[1]) + (y * t.m[4]) + (z * t.m[7]);
+    float zz = (x * t.m[2]) + (y * t.m[5]) + (z * t.m[8]);
+    x = xx;
+    y = yy;
+    z = zz;
 }
-
-
-uint16_t draw_str(const uint16_t x, const uint16_t y, const char * str, uint8_t scale)
-{
-  uint16_t xx = x;
-  uint16_t yy = max(y, vSpace(scale) / 4);
-  // draw text string, return ending x position (DAC count)
-  char c;
-  while ((c = *str++)) {
-    xx += draw_char(xx, yy, c, scale);
-  }
-  return xx;
-}
-
-
-static inline uint16_t _draw_char(const uint16_t x, const uint16_t y, const char c, const uint8_t scale)
-{
-	uint16_t ox = x;
-	uint16_t oy = y;
-	uint8_t pen_down = 0;
-
-	if (c < 0x20)
-		return 0;
-
-    const int asc = c - 0x20;
-    const uint8_t count = hershey_simplex[asc][0];  // no. vertices in character
-    const uint8_t wid = hershey_simplex[asc][1];  // width of character
-
-	for (uint8_t i = 0 ; i < count ; i++)
-	{
-        const int8_t px = hershey_simplex[asc][2 * i + 2];
-        const int8_t py = hershey_simplex[asc][2 * i + 3];
-
-		if (px == -1 && py == -1)
-		{
-			pen_down = 0;
-			continue;
-		}
-
-		const uint8_t nx = x + scaling(px, scale);
-		const uint8_t ny = y + scaling(py, scale);
-
-		if (pen_down)
-			line(ox, oy, nx, ny);
-
-		pen_down = 1;
-		ox = nx;
-		oy = ny;
-	}
-
-	return scaling(wid, scale);
-}
-
-
-uint16_t draw_char(const uint16_t x, const uint16_t y, const char c, const uint8_t scale)
-{
-  return _draw_char(x, y, c, scale);
-}
-
-
-uint16_t
-draw_char_big(
-	uint16_t x,
-	uint16_t y,
-	uint8_t c
-)
-{
-	return _draw_char(x, y, c, 3);
-}
-
-
-uint16_t
-draw_char_med(
-	uint16_t x,
-	uint16_t y,
-	uint8_t c
-)
-{
-	return _draw_char(x, y, c, 2);
-}
-
-uint16_t
-draw_char_small(
-	uint16_t x,
-	uint16_t y,
-	uint8_t c
-)
-{
-	return _draw_char(x, y, c, 1);
-}
-
-*/

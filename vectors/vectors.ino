@@ -12,16 +12,24 @@
     https://forum.pjrc.com/threads/44449-Vector-draw-examples-libs-using-T3-5-3-6-DAC
 
     TODO:
-      spinny cube
       rotating text
       text in from serial port (including line breaks etc)
       bubbles
+      switch function based on grounding one of the input pins 29/30/31/32
 */
 
+#include <TimeLib.h>
 #include "hershey_font.h"
 #include "teensydac.h"
 #include "quadrature.h"
 #include "vector.h"
+
+
+#define DIGITAL_FUNCTION_PIN_SINE     29
+#define DIGITAL_FUNCTION_PIN_BOWDITCH 30
+#define DIGITAL_FUNCTION_PIN_CUBE     31
+#define DIGITAL_FUNCTION_PIN_CLOCK    32
+
 
 const uint16_t  ch = 32;
 
@@ -29,8 +37,8 @@ uint8_t         fontScale = 9;
 
 
 
-uint16_t xCenter = 0;
-uint16_t yCenter = 0;
+uint16_t xCenter = 2047;
+uint16_t yCenter = 2047;
 
 
 char title[] = "Brickyard Collaborative";
@@ -45,12 +53,26 @@ char  symb[] = {48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 
 */
 
 void setup() {
-    Serial.begin(9600);
+  // set the Time library to use Teensy 3.0's RTC to keep time
+  setSyncProvider(getTeensy3Time);
 
-    analogWriteResolution(dacRes);
+  Serial.begin(115200);
+/*  
+while (!Serial);  // Wait for Arduino Serial Monitor to open
+  delay(100);
+  if (timeStatus()!= timeSet) {
+    Serial.println("Unable to sync with the RTC");
+  } else {
+    Serial.println("RTC has set the system time");
+  }
+  */
+  
+    pinMode(DIGITAL_FUNCTION_PIN_SINE, INPUT_PULLUP);
+    pinMode(DIGITAL_FUNCTION_PIN_BOWDITCH, INPUT_PULLUP);
+    pinMode(DIGITAL_FUNCTION_PIN_CUBE, INPUT_PULLUP);
+    pinMode(DIGITAL_FUNCTION_PIN_CLOCK, INPUT_PULLUP);
     
-    xCenter = pow(2, dacRes - 1);
-    yCenter = xCenter;
+    analogWriteResolution(dacRes);    
     moveto(xCenter, yCenter);
 
     uint16_t backspace = max(size_string(title, fontScale) / 2, xCenter);
@@ -66,20 +88,26 @@ void setup() {
 */
 
 void loop() {
-  
+
+  if (Serial.available()) {
+    time_t t = processSyncMessage();
+    if (t != 0) {
+      Teensy3Clock.set(t); // set the RTC
+      setTime(t);
+    }
+  }
+
   // line_test();
-  // box_test();
-  // circle_test();
-
+  box_test();
+  circle_test();
+  // function_test();
   bowditch_test();
-  
+  // clock_test();
   machine_test();
-
   spiral_test();
-
-  // text_test_1();
+  text_test_1();
   // text_test_2();
-
+  cube_test();
 }
 
 
@@ -130,8 +158,8 @@ void line_test() {
 
 void box_test() {
   // test box drawing
-  int xc = 2047;
-  int yc = 2047;
+  int xc = xCenter;
+  int yc = yCenter;
   for (int m = 0; m < 2; m++) {
     int dy = 40;
     int dx = 40;
@@ -155,12 +183,10 @@ void box_test() {
 
 float spiral(uint16_t start_pos, uint16_t end_pos, uint16_t rotate_degrees)
 {
-    int center_x = 2047;
-    int center_y = 2047;
     Quadrature arc(rotate_degrees, 180);
     float radius = 120 * expf((float)start_pos/480);
-    int x = radius + center_x;
-    int y = center_y;
+    int x = radius + xCenter;
+    int y = yCenter;
     moveto(x, y);
     for(uint16_t i=0; i<start_pos; i+=2)
     {
@@ -171,13 +197,13 @@ float spiral(uint16_t start_pos, uint16_t end_pos, uint16_t rotate_degrees)
         radius = 120 * expf((float)i/480);
         int xx, yy;
         arc.step();
-        xx = arc.cos() * radius + center_x;
-        yy = arc.sin() * radius + center_y;
+        xx = arc.cos() * radius + xCenter;
+        yy = arc.sin() * radius + yCenter;
         line(x, y, xx, yy);
         x = xx;
         y = yy;
     }
-    moveto(center_x, center_y);
+    moveto(xCenter, yCenter);
     radius = 120 * expf((float)start_pos/480);
     return radius;
 }
@@ -187,10 +213,10 @@ void circle_test() {
   // test circle drawing
   for (int m = 0;  m < 2; m++) {
     for (float r = 1; r < 2000; r *= 1.03) {
-      quad_circle(2047, 2047, r);
+      quad_circle(xCenter, yCenter, r);
     }
     for (float r = 2000; r > 1 ; r *= 0.97) {
-      quad_circle(2047, 2047, r);
+      quad_circle(xCenter, yCenter, r);
     }
   }
 }
@@ -205,7 +231,7 @@ void spiral_test()
     if(end<1500)
     {
       float rad = 120 * expf((float)end/480);
-      quad_circle(2047, 2047, rad);
+      quad_circle(xCenter, yCenter, rad);
     }
     spiral(0, end, -rot);
   }
@@ -213,7 +239,7 @@ void spiral_test()
   for(int rot=15; rot<1500; rot += 15)
   {
     float rad = spiral(rot, 1500, -rot);
-    quad_circle(2047, 2047, rad);
+    quad_circle(xCenter, yCenter, rad);
   }
 
 }
@@ -226,14 +252,14 @@ void spiral_test()
 void text_test_1() {
   // display font really big
   uint8_t scale = 80;
-  uint16_t xx = 2047;
-  uint16_t yy = 2047 - vSpace(scale) / 4;
+  uint16_t xx = xCenter;
+  uint16_t yy = yCenter - vSpace(scale) / 4;
   char b[2];
   for (char c = 32; c < 127; c++)
   {
     String Q = String(c);
     Q.toCharArray(b, 2);
-    xx = 2047 - size_string(b, scale) / 2 ;
+    xx = xCenter - size_string(b, scale) / 2 ;
     long start = millis();
     while (millis() - start < 80)
     {
@@ -252,21 +278,21 @@ void text_test_2() {
   for (int m = 0; m < 2; m++) {
     for (float p = 2 ; p < 16; p *= 1.02) {
       uint8_t s = min(p, 8);
-      uint16_t yy = 2247;
-      uint16_t xx = 2047 ;
-      xx = 2047 - size_string(caps, int(s)) / 2;
+      uint16_t yy = yCenter + 200;
+      uint16_t xx = xCenter ;
+      xx = xCenter - size_string(caps, int(s)) / 2;
       draw_string(caps, xx, yy, s);
 
       yy = yy - vSpace(s);
-      xx = 2047 - size_string(lc, int(s)) / 2;
+      xx = xCenter - size_string(lc, int(s)) / 2;
       draw_string(lc, xx, yy, s);
 
       yy = yy - vSpace(s);
-      xx = 2047 - size_string(syma, int(s)) / 2;
+      xx = xCenter - size_string(syma, int(s)) / 2;
       draw_string(syma, xx, yy, s);
 
       yy = yy - vSpace(s);
-      xx = 2047 - size_string(symb, int(s)) / 2;
+      xx = xCenter - size_string(symb, int(s)) / 2;
       draw_string(symb, xx, yy, s);
     }
   }
@@ -308,8 +334,8 @@ void draw_machine(uint8_t scale)
         int instr = data[point];
         int tgt_x = data[point+1];
         int tgt_y = data[point+2];
-        int x = -tgt_x * scale / 64 + 2047;
-        int y = -tgt_y * scale / 64 + 2047;
+        int x = -tgt_x * scale / 64 + xCenter;
+        int y = -tgt_y * scale / 64 + yCenter;
         if(instr==M)
         {
             moveto(x, y);
@@ -346,17 +372,265 @@ void machine_test()
 void bowditch_test()
 {
     // Bowditch aka Lissajous figures
-    int freq1 = 301;
-    int freq2 = 200;
+    int wavelen1 = 301;
+    int wavelen2 = 200;
     
-    Quadrature pendulum1(0, freq1);
-    Quadrature pendulum2(0, freq2);
-    moveto(pendulum1.cos() * 2048 + 2047, pendulum2.sin() * 2048 + 2047);
+    Quadrature pendulum1(0, wavelen1, 2000);
+    Quadrature pendulum2(0, wavelen2, 2000);
+    moveto(pendulum1.cos() + xCenter, pendulum2.sin() + yCenter);
     long start = millis();
     while (millis() - start < 10000)
     {
+        lineto(pendulum1.cos() + xCenter, pendulum2.sin() + yCenter);
         pendulum1.step();
         pendulum2.step();
-        lineto(pendulum1.cos() * 2048 + 2047, pendulum2.sin() * 2048 + 2047);
     }
+}
+
+
+/*
+ * **************************************************************************************
+*/
+
+
+void project(Point3 *vertices, Point2 *dest, uint8_t count)
+{
+  // Project from 3d to 2d (and scale for display)
+  // For the trivial version, camera at Z=-inf, just copy across the x & y.
+  // Add a fraction of 'z' for some perspective.
+  for(uint8_t i=0; i<count; i++)
+  {
+    dest[i].x = vertices[i].x * (1000 + 20 * vertices[i].z) + xCenter;
+    dest[i].y = vertices[i].y * (1000 + 20 * vertices[i].z) + yCenter;
+  }
+}
+
+void cube_test()
+{
+    // rotating cube
+
+    // default cube points are drawn in sequence
+    // let's call them (x=left/right y=up/down z=front/back)
+    //      ____        
+    //     /    /     LUB  RUB        6   7
+    //   .----./ |   LUF  RUF        4   5
+    //   .    .  |
+    //   .    . /     LDB    RDB      2   3
+    //   .____./     LDF    RDF      0   1
+    //
+    // draw sequence is 
+    // 0-4-5-1-3-7-6-2-0-1 3-2 5-7 6-4
+    //
+    Point3 v[8] = {
+      //      x    y    z
+      Point3(-1.0, -1.0, -1.0),
+      Point3( 1.0, -1.0, -1.0),
+      Point3(-1.0, -1.0,  1.0),
+      Point3( 1.0, -1.0,  1.0),
+      Point3(-1.0,  1.0, -1.0),
+      Point3( 1.0,  1.0, -1.0),
+      Point3(-1.0,  1.0,  1.0),
+      Point3( 1.0,  1.0,  1.0),
+    };
+    Point2 p[8];
+
+    // Three separate rotations
+    Quadrature qx(0,  360, 0.05);
+    Quadrature qy(0,  807, 0.03);
+    Quadrature qz(0, 1023, 0.02);
+
+    long start = millis();
+    while (millis() - start < 50000)
+    {
+        // Project the 3d points onto the 2d space
+        project(v, p, 8);
+        // Draw the edges
+        moveto(p[0].x, p[0].y);
+        lineto(p[4].x, p[4].y);
+        lineto(p[5].x, p[5].y);
+        lineto(p[1].x, p[1].y);
+        lineto(p[3].x, p[3].y);
+        lineto(p[7].x, p[7].y);
+        lineto(p[6].x, p[6].y);
+        lineto(p[2].x, p[2].y);
+        lineto(p[0].x, p[0].y);
+        lineto(p[1].x, p[1].y);
+        moveto(p[3].x, p[3].y);
+        lineto(p[2].x, p[2].y);
+        moveto(p[5].x, p[5].y);
+        lineto(p[7].x, p[7].y);
+        moveto(p[6].x, p[6].y);
+        lineto(p[4].x, p[4].y);
+
+        // Step the rotation amounts
+        qx.step();
+        qy.step();
+        qz.step();
+        float ax = qx.sin();
+        float ay = qy.sin();
+        float az = qz.sin();
+        
+        // Rotate each vertex by a small amount, around the center of the cube (which conveniently is 0,0)
+        Matrix3 tx = {1, 0, 0, 0, cosf(ax), -sinf(ax), 0, sinf(ax), cosf(ax)};
+        Matrix3 ty = {cosf(ay), 0, sinf(ay), 0, 1, 0, -sinf(ay), 0, cosf(ay)};
+        Matrix3 tz = {cosf(az), -sinf(az), 0, sinf(az), cosf(az), 0, 0, 0, 1};
+        for(uint8_t i=0; i<8; i++)
+        {
+            v[i].rotate(tx);
+            v[i].rotate(ty);
+            v[i].rotate(tz);
+        }        
+    }
+}
+
+
+/*
+ * **************************************************************************************
+*/
+
+void function_test()
+{
+    // Sine wave
+    int wavelen = 400;
+    long start = millis();
+    while (millis() - start < 10000)
+    {
+        Quadrature wave(0, wavelen);
+        int v = xCenter;
+        moveto(0, v);
+        for(uint16_t x=0; x<1024; x++)
+        {
+            lineto(x << 2, wave.sin() * 2000 + yCenter);
+            wave.step();
+        }
+    }
+
+    // Square wave
+    while (millis() - start < 20000)
+    {
+        Quadrature wave(0, wavelen);
+        int v = 0;
+        moveto(0, v);
+        for(uint16_t x=0; x<1024; x++)
+        {
+            int w = (wave.sin() > 0) ? 4048 : 47;
+            if(v==w)
+            {
+                lineto(x << 2, w);
+            } else
+            {
+                moveto(x << 2, w);
+            }
+            v = w;
+            wave.step();
+        }
+    }
+
+    // Triangle
+    while (millis() - start < 30000)
+    {
+        Quadrature wave(0, wavelen);
+        int v = 47;
+        moveto(0, v);
+        for(uint16_t x=0; x<1024; x++)
+        {
+            v += (wave.sin() > 0) ? 16 : -16;
+            lineto(x << 2, v);
+            wave.step();
+        }
+    }
+}
+
+
+/*
+ * **************************************************************************************
+*/
+
+time_t getTeensy3Time()
+{
+  return Teensy3Clock.get();
+}
+
+/*  code to process time sync messages from the serial port   */
+#define TIME_HEADER  "T"   // Header tag for serial time sync message
+
+unsigned long processSyncMessage() {
+  unsigned long pctime = 0L;
+  const unsigned long DEFAULT_TIME = 1357041600; // Jan 1 2013 
+
+  if(Serial.find(TIME_HEADER)) {
+     pctime = Serial.parseInt();
+     return pctime;
+     if( pctime < DEFAULT_TIME) { // check the value is a valid time (greater than Jan 1 2013)
+       pctime = 0L; // return 0 to indicate that the time is not valid
+     }
+  }
+  return pctime;
+}
+
+void draw_clock()
+{
+    // Draw the clock face
+    uint16_t radf = 2000;  // clock face
+    float rad0 = 0.95;  // outer end of ticks
+    float rad1 = 0.925;  // inner end of 1-ticks
+    float rad5 = 0.875;  // inner end of 5-ticks
+    float rad15 = 0.8;  // inner end of 15-ticks
+    Quadrature face(0, 360, radf);
+    uint16_t ox = face.sin() + 2048;
+    uint16_t oy = face.cos() + 2048;
+    for(uint16_t i=0; i<360; i++)
+    {
+        face.step();
+        float x = face.sin();
+        float y = face.cos();
+        uint16_t cx = x + 2048;
+        uint16_t cy = y + 2048;
+        line(ox, oy, cx, cy);
+        if(i % 90 == 0)       // 15-minute marks
+        {
+            moveto(x * rad0 + 2048, y * rad0 + 2048);
+            lineto(x * rad15 + 2048, y * rad15 + 2048);
+            lineto(x * rad0 + 2048, y * rad0 + 2048);
+            lineto(x * rad15 + 2048, y * rad15 + 2048);
+        }
+        else if(i % 30 == 0)  // 5-minute marks
+        {
+            moveto(x * rad0 + 2048, y * rad0 + 2048);
+            lineto(x * rad5 + 2048, y * rad5 + 2048);          
+            lineto(x * rad0 + 2048, y * rad0 + 2048);
+        }
+        else if(i % 6 == 0)  // 1-minute marks
+        {
+            moveto(x * rad0 + 2048, y * rad0 + 2048);
+            lineto(x * rad1 + 2048, y * rad1 + 2048);
+        }
+        ox = cx;
+        oy = cy;
+    }
+    // Draw the hands
+    // Draw the seconds hand
+}
+
+
+void clock_test()
+{
+    long start = millis();
+    while (millis() - start < 10000)
+    {
+        draw_clock();
+    }
+}
+
+
+/*
+ * **************************************************************************************
+*/
+
+void bubbles_test()
+{
+  // Draw a collection of bubbles.  They start small and then pop.
+  Quadrature * bubbles[10];
+
+  
 }
